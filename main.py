@@ -8,8 +8,10 @@ import json
 import logging
 from requests.exceptions import HTTPError
 
+print("--- SCRIPT START ---")
+
 # LangChain imports
-from langchain_gigachat import GigaChat
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 # Configure logging
@@ -21,14 +23,18 @@ load_dotenv()
 
 app = FastAPI()
 
-# Get GigaChat authorization key from environment variable
-GIGACHAT_CREDENTIALS = os.getenv("GIGACHAT_CREDENTIALS")
+# Get Polza.ai API key from environment variable
+POLZA_API_KEY = os.getenv("POLZA_API_KEY")
 
-if not GIGACHAT_CREDENTIALS:
-    raise ValueError("GIGACHAT_CREDENTIALS environment variable not set.")
+if not POLZA_API_KEY:
+    raise ValueError("POLZA_API_KEY environment variable not set.")
 
-# Initialize GigaChat LLM with the latest model
-llm = GigaChat(model="GigaChat-2-Max", credentials=GIGACHAT_CREDENTIALS, verify_ssl_certs=False)
+# Initialize ChatOpenAI LLM for polza.ai
+llm = ChatOpenAI(
+    model="google/gemini-3-pro-preview",
+    api_key=POLZA_API_KEY,
+    base_url="https://api.polza.ai/api/v1"
+)
 
 class CheckSnapshotRequest(BaseModel):
     image_base64: str
@@ -55,6 +61,8 @@ structured_llm = llm.with_structured_output(SnapIssueList)
 
 @app.post("/checkSnapshot", response_model=List[SnapIssue])
 async def check_snapshot(request: CheckSnapshotRequest):
+    print("--- /checkSnapshot called ---")
+    logger.info("Received request for /checkSnapshot")
     try:
         messages = [
             HumanMessage(
@@ -73,13 +81,15 @@ async def check_snapshot(request: CheckSnapshotRequest):
             ),
         ]
 
+        logger.info("Invoking structured_llm with the provided messages.")
         # Invoke the LLM with structured output
         ai_response = structured_llm.invoke(messages)
+        logger.info("Successfully received response from structured_llm.")
         
         return ai_response.issues
 
     except HTTPError as e:
-        logger.error(f"HTTPError from GigaChat API: {e}", exc_info=True)
+        logger.error(f"HTTPError from polza.ai API: {e}", exc_info=True)
         if e.response is not None:
             raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
         else:

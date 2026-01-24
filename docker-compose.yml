@@ -3,5 +3,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      - POLZA_API_KEY=${POLZA_API_KEY}
     env_file:
       - .env
