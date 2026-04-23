@@ -31,7 +31,7 @@ if not POLZA_API_KEY:
 
 # Initialize ChatOpenAI LLM for polza.ai
 llm = ChatOpenAI(
-    model="google/gemini-3.1-pro-preview",
+    model="anthropic/claude-opus-4.7",
     api_key=POLZA_API_KEY,
     base_url="https://api.polza.ai/api/v1"
 )
