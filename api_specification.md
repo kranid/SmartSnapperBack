@@ -1,54 +1,234 @@
+# API-спецификация SmartSnapper Backend
 
-# API Specification for SmartSnapper Backend
+## Назначение
 
-## Endpoint: `/checkSnapshot`
+Метод принимает скриншот экрана и структурированное семантическое описание элементов интерфейса. Сервер сам добавляет текстовую часть промтаотправляет данные в polza.ai и возвращает список найденных проблем доступности.
 
-*   **Method:** `POST`
-*   **Content-Type:** `application/json`
+Клиент не должен отправлять текстовый `prompt`.
 
-### Request Body
+## HTTP-запрос
 
-A JSON object with the following structure:
+### Endpoint
+
+```http
+POST http://a11ylab.ru:8000##/checksnapshot
+```
+
+### Headers
+
+Обязательные headers:
+
+```http
+Content-Type: application/json
+```
+
+Рекомендуемые headers:
+
+```http
+Accept: application/json
+```
+
+Авторизация со стороны клиента не требуется.
+
+### Body
+
+Body должен быть JSON-объектом.
 
 ```json
 {
-  "prompt": "<string>",
-  "image_base64": "<string>"
+  "snapnodes": [
+    {
+      "text": "Вернуться назад",
+      "actionable": true,
+      "role": "button",
+      "rect": {
+        "left": 11,
+        "top": 87,
+        "right": 146,
+        "bottom": 222
+      }
+    }
+  ],
+  "image_base64": "<base64-строка изображения>"
 }
 ```
 
-*   `prompt`: A detailed text prompt containing instructions for the AI model and a JSON string with the semantic description of the screen.
-*   `image_base64`: A base64-encoded string of the screenshot image (JPEG format).
+### Поля body
 
-### Success Response (200 OK)
+| Поле | Тип | Обязательное | Описание |
+| --- | --- | --- | --- |
+| `snapnodes` | `array<object>` | Да | Массив объектов с семантическим описанием элементов экрана. |
+| `image_base64` | `string` | Да | Скриншот, закодированный в base64. Нужно передавать только base64-строку, без префикса `data:image/jpeg;base64,`. |
 
-A JSON array of `SnapIssue` objects. Each object has the following structure:
+## Объект `snapnode`
+
+`snapnode` - это JSON-объект, описывающий один элемент интерфейса. Сервер не требует жесткой схемы для каждого элемента, но обычно объект может содержать такие поля:
+
+| Поле | Тип | Описание |
+| --- | --- | --- |
+| `text` | `string` | Текстовая подпись элемента. |
+| `rect` | `object` | Координаты элемента на скриншоте. |
+| `actionable` | `boolean` | Признак интерактивного элемента. |
+| `role` | `string` | Роль элемента, например `button`, `tab`, `check_box`, `edit_text`, `image_button`. |
+| `heading` | `boolean` | Признак заголовка. |
+| `checked` | `boolean` | Состояние чекбокса или переключателя. |
+| `selected` | `boolean` | Признак выбранного элемента. |
+| `isselected` | `boolean` | Альтернативное поле для признака выбранного элемента. |
+| `roleDescription` | `string` | Текстовое описание роли, если оно есть на клиенте. |
+| `stateDescription` | `string` | Текстовое описание состояния, если оно есть на клиенте. |
+
+### Объект `rect`
+
+`rect` описывает координаты элемента на скриншоте.
+
+```json
+{
+  "left": 11,
+  "top": 87,
+  "right": 146,
+  "bottom": 222
+}
+```
+
+| Поле | Тип | Описание |
+| --- | --- | --- |
+| `left` | `integer` | Левая координата элемента. |
+| `top` | `integer` | Верхняя координата элемента. |
+| `right` | `integer` | Правая координата элемента. |
+| `bottom` | `integer` | Нижняя координата элемента. |
+
+## Успешный HTTP-ответ
+
+### Status
+
+```http
+200 OK
+```
+
+### Headers
+
+```http
+Content-Type: application/json
+```
+
+### Body
+
+Body содержит JSON-массив найденных проблем. Если проблем нет, сервер возвращает пустой массив `[]`.
 
 ```json
 [
   {
-    "message": "<string>",
+    "message": "property heading must be true",
     "rect": {
-      "left": <integer>,
-      "top": <integer>,
-      "right": <integer>,
-      "bottom": <integer>
+      "left": 202,
+      "top": 77,
+      "right": 703,
+      "bottom": 232
     },
-    "path": "<string>"
+    "path": ""
   }
 ]
 ```
 
-*   `message`: A description of the accessibility issue found.
-*   `rect`: An object representing the bounding box of the element with the issue.
-*   `path`: An optional path to the UI element.
+### Поля объекта ответа
 
-### Error Response (4xx/5xx)
+| Поле | Тип | Описание |
+| --- | --- | --- |
+| `message` | `string` | Описание найденной проблемы. |
+| `rect` | `object` | Координаты элемента, в котором найдена проблема. |
+| `path` | `string` | Путь до элемента, если он был определен. Может быть пустой строкой. |
 
-A JSON object with a `detail` field containing the error message.
+## HTTP-ответ с ошибкой
+
+При ошибке сервер возвращает JSON-объект с полем `detail`.
 
 ```json
 {
-  "detail": "<string>"
+  "detail": "Описание ошибки"
 }
+```
+
+Возможные статусы:
+
+| Status | Когда возникает |
+| --- | --- |
+| `422 Unprocessable Entity` | Неверный формат body: например, отсутствует `snapnodes`, отсутствует `image_base64` или `snapnodes` не является массивом. |
+| `500 Internal Server Error` | Внутренняя ошибка сервера или ошибка при обращении к polza.ai. |
+| Другой HTTP-статус | Может быть возвращен, если polza.ai вернул ошибку и сервер пробросил ее клиенту. |
+
+## Пример HTTP-запроса через curl
+
+```bash
+curl -X POST "http://a11ylab.ru:8000##/checksnapshot" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "snapnodes": [
+      {
+        "text": "Вернуться назад",
+        "actionable": true,
+        "role": "button",
+        "rect": {
+          "left": 11,
+          "top": 87,
+          "right": 146,
+          "bottom": 222
+        }
+      },
+      {
+        "text": "Настроить разделы",
+        "heading": true,
+        "rect": {
+          "left": 202,
+          "top": 77,
+          "right": 703,
+          "bottom": 232
+        }
+      }
+    ],
+    "image_base64": "<base64-строка изображения>"
+  }'
+```
+
+## Пример запроса на Python
+
+```python
+import base64
+import json
+
+import requests
+
+url = "http://a11ylab.ru:8000##/checksnapshot"
+
+with open("screenshot.jpg", "rb") as file:
+    image_base64 = base64.b64encode(file.read()).decode("utf-8")
+
+payload = {
+    "snapnodes": [
+        {
+            "text": "Вернуться назад",
+            "actionable": True,
+            "role": "button",
+            "rect": {
+                "left": 11,
+                "top": 87,
+                "right": 146,
+                "bottom": 222,
+            },
+        }
+    ],
+    "image_base64": image_base64,
+}
+
+response = requests.post(
+    url,
+    headers={
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    },
+    json=payload,
+)
+response.raise_for_status()
+
+print(json.dumps(response.json(), ensure_ascii=False, indent=2))
 ```
