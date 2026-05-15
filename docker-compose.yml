@@ -7,3 +7,30 @@ services:
       - POLZA_API_KEY=${POLZA_API_KEY}
     env_file:
       - .env
+  test:
+    build: .
+    command: sh -c "pip install --no-cache-dir -r tests/requirements-test.txt && pytest"
+    environment:
+      - POLZA_API_KEY=test-api-key
+      - PYTHONPATH=/app
+    profiles:
+      - test
+  e2e:
+    build: .
+    command: >
+      sh -c "python -c \"import time, urllib.request
+      for _ in range(60):
+          try:
+              urllib.request.urlopen('http://backend:8000/health', timeout=2)
+              break
+          except Exception:
+              time.sleep(1)
+      else:
+          raise SystemExit('backend did not become healthy')\"
+      && python tests/send_request.py"
+    depends_on:
+      - backend
+    environment:
+      - CHECK_SNAPSHOT_URL=http://backend:8000/checkSnapshot
+    profiles:
+      - e2e

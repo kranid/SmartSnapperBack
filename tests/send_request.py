@@ -26,12 +26,21 @@ payload = {
 }
 
 # The URL of the running server
-url = "http://localhost:8000/checkSnapshot"
+url = os.getenv("CHECK_SNAPSHOT_URL", "http://127.0.0.1:8000/checkSnapshot")
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-Debug-Client": "tests/send_request.py",
+}
+session = requests.Session()
+session.trust_env = False
 
 # Send the POST request
 try:
-    print("Sending request to the server...")
-    response = requests.post(url, json=payload)
+    print(f"Sending request to the server: {url}")
+    response = session.post(url, json=payload, headers=headers, timeout=120)
+    print(f"Response URL: {response.url}")
+    print(f"Response status: {response.status_code}")
     response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
 
     # Print the response from the server
