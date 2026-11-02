@@ -1,0 +1,79 @@
+Инструкция по подключению SmartSnapper CheckSnapshot
+====================================================
+
+Рабочий endpoint:
+
+POST http://195.58.55.90:8000/checkSnapshot
+
+Проверка доступности сервиса:
+
+GET http://195.58.55.90:8000/health
+
+Успешный health-ответ:
+
+HTTP 200 OK
+{"status":"ok"}
+
+
+Заголовки запроса
+-----------------
+
+Content-Type: application/json
+Accept: application/json
+
+
+Тело запроса
+------------
+
+{
+  "snapshotId": "уникальный-id-snapshot",
+  "platform": "android",
+  "capturedAt": "2026-11-02T12:00:00Z",
+  "image_base64": "<изображение в Base64 без обязательного data URL prefix>",
+  "snapnodes": []
+}
+
+Поля:
+
+- snapshotId — непустой уникальный идентификатор snapshot.
+- platform — название платформы, для Android передавать "android".
+- capturedAt — время создания snapshot в формате ISO 8601.
+- image_base64 — JPEG, PNG, GIF или WEBP, закодированный в Base64.
+- snapnodes — массив объектов с семантическим описанием элементов экрана.
+
+
+Успешный ответ
+--------------
+
+HTTP 201 Created
+
+{
+  "taskId": "task-...",
+  "snapshotId": "уникальный-id-snapshot",
+  "status": "completed",
+  "violations": [
+    {
+      "message": "Описание найденного нарушения",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 100,
+        "bottom": 100
+      },
+      "path": ""
+    }
+  ]
+}
+
+
+Примечание для Android
+----------------------
+
+Сейчас endpoint использует обычный HTTP. Android может блокировать незашифрованный
+трафик. В таком случае необходимо разрешить cleartext traffic для IP 195.58.55.90
+в Network Security Configuration либо настроить HTTPS.
+
+Для production рекомендуется использовать HTTPS и доменный адрес, например:
+
+https://a11ylab.ru/checkSnapshot
+

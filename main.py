@@ -44,13 +44,15 @@ PROMPT_TEXT = """
 Твоя задача выявить все значимые элементы экрана, кнопки, вкладки, заголовки, текстовые поля и чекбоксы на скриншоте и убедиться, что их семантика корректно определена в семантическом описании.
 Если ты обнаруживаешь ошибки в семантике, ты должен предоставить описание этих ошибок в виде json с массивом объектов.
 Каждый объект должен содержать следующие свойства:
-message - сообщение об ошибке
+message - краткое описание обнаруженной проблемы,
+recommendation - конкретная рекомендация, как исправить проблему,
 объект rect с  координатами элемента, в котором была обнаружена ошибка,
 Убедись, что в объекте rect указаны все четыре координаты: left, top, right, bottom.
 В качестве примера используй следующий массив:
 [
 {
     "message": "property heading must be true ",
+    "recommendation": "Set heading=true for this heading element.",
     "rect": {
     "left": 48,
     "top": 128,
@@ -61,6 +63,7 @@ message - сообщение об ошибке
 },
 {
     "message": "property role must by button",
+    "recommendation": "Set role=button for this actionable element.",
     "rect": {
     "left": 960,
     "top": 129,
@@ -95,6 +98,7 @@ RESPONSE_FORMAT_PROMPT = """
 [
   {
     "message": "описание проблемы",
+    "recommendation": "конкретное исправление проблемы",
     "rect": {
       "left": 0,
       "top": 0,
@@ -139,6 +143,7 @@ class SnapRect(BaseModel):
 
 class SnapIssue(BaseModel):
     message: str = Field(..., description="A description of the accessibility issue found.")
+    recommendation: str = Field(..., description="A concrete recommendation for fixing the accessibility issue.")
     rect: SnapRect = Field(..., description="The bounding box of the element with the issue.")
     path: str = Field(default="", description="An optional path to the UI element.")
 

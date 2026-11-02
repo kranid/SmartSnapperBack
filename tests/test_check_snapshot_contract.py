@@ -66,6 +66,7 @@ def test_check_snapshot_accepts_both_routes_and_returns_issue(client, monkeypatc
         json.dumps([
             {
                 "message": "property role must be button",
+                "recommendation": "Set role=button for this actionable element.",
                 "rect": {"left": 1, "top": 2, "right": 3, "bottom": 4},
                 "path": "root/button",
             }
@@ -81,6 +82,7 @@ def test_check_snapshot_accepts_both_routes_and_returns_issue(client, monkeypatc
     assert body["status"] == "completed"
     assert body["violations"] == [{
         "message": "property role must be button",
+        "recommendation": "Set role=button for this actionable element.",
         "rect": {"left": 1, "top": 2, "right": 3, "bottom": 4},
         "path": "root/button",
     }]
@@ -152,8 +154,27 @@ def test_check_snapshot_returns_502_for_missing_rect_coordinate(client, monkeypa
         json.dumps([
             {
                 "message": "missing coordinate",
+                "recommendation": "Provide all four rectangle coordinates.",
                 "rect": {"left": 1, "top": 2, "right": 3},
                 "path": "",
+            }
+        ]),
+    )
+
+    response = client.post("/checkSnapshot", json=payload())
+
+    assert response.status_code == 502
+    assert response.json()["message"] == ["Invalid JSON response from polza.ai."]
+
+
+def test_check_snapshot_returns_502_for_missing_recommendation(client, monkeypatch):
+    patch_llm(
+        monkeypatch,
+        json.dumps([
+            {
+                "message": "property role must be button",
+                "rect": {"left": 1, "top": 2, "right": 3, "bottom": 4},
+                "path": "root/button",
             }
         ]),
     )
