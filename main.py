@@ -1,11 +1,16 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 import base64
 import os
 from dotenv import load_dotenv
 import json
 import logging
+import uuid
+from http import HTTPStatus
 from openai import APIStatusError
 from pydantic import ValidationError
 from requests.exceptions import HTTPError
@@ -27,9 +32,12 @@ app = FastAPI()
 
 # Get Polza.ai API key from environment variable
 POLZA_API_KEY = os.getenv("POLZA_API_KEY")
+MODEL_TIMEOUT_SECONDS = float(os.getenv("MODEL_TIMEOUT_SECONDS", "120"))
 
 if not POLZA_API_KEY:
     raise ValueError("POLZA_API_KEY environment variable not set.")
+if MODEL_TIMEOUT_SECONDS <= 0:
+    raise ValueError("MODEL_TIMEOUT_SECONDS must be greater than zero.")
 
 PROMPT_TEXT = """
 Я предоставлю тебе скриншот экрана и его семантическое описание в json .
@@ -100,10 +108,12 @@ RESPONSE_FORMAT_PROMPT = """
 """.strip()
 
 # Initialize ChatOpenAI LLM for polza.ai
-llm = ChatOpenAI(
-    model="anthropic/claude-opus-4.7",
+check_snapshot_llm = ChatOpenAI(
+    model="anthropic/claude-opus-5.5",
     api_key=POLZA_API_KEY,
-    base_url="https://api.polza.ai/api/v1"
+    base_url="https://api.polza.ai/api/v1",
+    timeout=MODEL_TIMEOUT_SECONDS,
+    max_retries=0,
 )
 
 SnapNode = Dict[str, Any]
@@ -115,7 +125,10 @@ class AIResponseFormatError(ValueError):
     pass
 
 class CheckSnapshotRequest(BaseModel):
+    snapshotId: str = Field(..., min_length=1, description="Client-generated snapshot identifier.")
     image_base64: str
+    platform: str = Field(..., min_length=1)
+    capturedAt: str = Field(..., min_length=1, description="ISO-8601 capture timestamp.")
     snapnodes: List[SnapNode] = Field(..., description="Structured semantic description of the screen.")
 
 class SnapRect(BaseModel):
@@ -128,6 +141,12 @@ class SnapIssue(BaseModel):
     message: str = Field(..., description="A description of the accessibility issue found.")
     rect: SnapRect = Field(..., description="The bounding box of the element with the issue.")
     path: str = Field(default="", description="An optional path to the UI element.")
+
+class CheckSnapshotResponse(BaseModel):
+    taskId: str
+    snapshotId: str
+    status: Literal["completed"] = "completed"
+    violations: List[SnapIssue]
 
 def build_prompt(snapnodes: List[SnapNode]) -> str:
     return (
@@ -225,8 +244,35 @@ def api_status_error_detail(error: APIStatusError) -> str:
             pass
     return str(error)
 
-@app.post("/checksnapshot", response_model=List[SnapIssue])
-@app.post("/checkSnapshot", response_model=List[SnapIssue])
+def check_snapshot_error(status_code: int, message: str) -> JSONResponse:
+    try:
+        error = HTTPStatus(status_code).phrase
+    except ValueError:
+        error = "Error"
+    return JSONResponse(
+        status_code=status_code,
+        content={"message": [message], "error": error, "statusCode": status_code},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, error: RequestValidationError):
+    if request.url.path.casefold() != "/checksnapshot":
+        return await request_validation_exception_handler(request, error)
+
+    messages = []
+    for item in error.errors():
+        location = ".".join(str(part) for part in item.get("loc", ()) if part != "body")
+        message = item.get("msg", "Invalid request")
+        messages.append(f"{location}: {message}" if location else message)
+    return JSONResponse(
+        status_code=422,
+        content={"message": messages, "error": HTTPStatus(422).phrase, "statusCode": 422},
+    )
+
+
+@app.post("/checksnapshot", response_model=CheckSnapshotResponse, status_code=201)
+@app.post("/checkSnapshot", response_model=CheckSnapshotResponse, status_code=201)
 async def check_snapshot(request: CheckSnapshotRequest, http_request: Request):
     print("--- /checkSnapshot called ---")
     logger.info("Received request for /checkSnapshot")
@@ -252,34 +298,38 @@ async def check_snapshot(request: CheckSnapshotRequest, http_request: Request):
         ]
 
         logger.info("Invoking llm with the provided messages.")
-        ai_response = llm.invoke(messages)
+        ai_response = check_snapshot_llm.invoke(messages)
         logger.info("Successfully received response from llm.")
         
-        return parse_ai_issues_response(ai_response.content)
+        return CheckSnapshotResponse(
+            taskId=f"task-{uuid.uuid4()}",
+            snapshotId=request.snapshotId,
+            violations=parse_ai_issues_response(ai_response.content),
+        )
 
     except ImagePayloadError as e:
         logger.warning("Invalid checkSnapshot request: %s", e)
-        raise HTTPException(status_code=422, detail=str(e))
+        return check_snapshot_error(422, str(e))
 
     except (json.JSONDecodeError, ValidationError, AIResponseFormatError) as e:
         logger.error("Invalid JSON response from polza.ai: %s", e, exc_info=True)
-        raise HTTPException(status_code=502, detail="Invalid JSON response from polza.ai.")
+        return check_snapshot_error(502, "Invalid JSON response from polza.ai.")
 
     except APIStatusError as e:
         status_code = e.status_code or 500
         logger.error("APIStatusError from polza.ai API: %s", e, exc_info=True)
-        raise HTTPException(status_code=status_code, detail=api_status_error_detail(e))
+        return check_snapshot_error(status_code, api_status_error_detail(e))
 
     except HTTPError as e:
         logger.error(f"HTTPError from polza.ai API: {e}", exc_info=True)
         if e.response is not None:
-            raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+            return check_snapshot_error(e.response.status_code, e.response.text)
         else:
-            raise HTTPException(status_code=500, detail=str(e))
+            return check_snapshot_error(500, str(e))
 
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+        return check_snapshot_error(500, f"An unexpected error occurred: {str(e)}")
 
 @app.get("/health")
 async def health_check():

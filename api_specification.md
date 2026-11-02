@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Метод принимает скриншот экрана и структурированное семантическое описание элементов интерфейса. Сервер сам добавляет текстовую часть промтаотправляет данные в polza.ai и возвращает список найденных проблем доступности.
+Метод принимает скриншот экрана и структурированное семантическое описание элементов интерфейса. Сервер сам добавляет текстовую часть промта, отправляет данные в polza.ai и возвращает список найденных проблем доступности.
 
 Клиент не должен отправлять текстовый `prompt`.
 
@@ -11,8 +11,10 @@
 ### Endpoint
 
 ```http
-POST http://a11ylab.ru:8000##/checksnapshot
+POST /checkSnapshot
 ```
+
+Для обратной совместимости также поддерживается `POST /checksnapshot`.
 
 ### Headers
 
@@ -36,6 +38,9 @@ Body должен быть JSON-объектом.
 
 ```json
 {
+  "snapshotId": "snap-001",
+  "platform": "android",
+  "capturedAt": "2026-06-10T17:09:39.968Z",
   "snapnodes": [
     {
       "text": "Вернуться назад",
@@ -57,6 +62,9 @@ Body должен быть JSON-объектом.
 
 | Поле | Тип | Обязательное | Описание |
 | --- | --- | --- | --- |
+| `snapshotId` | `string` | Да | Непустой идентификатор snapshot, сформированный клиентом. |
+| `platform` | `string` | Да | Непустое имя платформы. |
+| `capturedAt` | `string` | Да | Непустая дата и время создания snapshot в формате ISO 8601. |
 | `snapnodes` | `array<object>` | Да | Массив объектов с семантическим описанием элементов экрана. |
 | `image_base64` | `string` | Да | Скриншот, закодированный в base64. Нужно передавать только base64-строку, без префикса `data:image/jpeg;base64,`. |
 
@@ -102,7 +110,7 @@ Body должен быть JSON-объектом.
 ### Status
 
 ```http
-200 OK
+201 Created
 ```
 
 ### Headers
@@ -113,38 +121,46 @@ Content-Type: application/json
 
 ### Body
 
-Body содержит JSON-массив найденных проблем. Если проблем нет, сервер возвращает пустой массив `[]`.
-
-```json
-[
-  {
-    "message": "property heading must be true",
-    "rect": {
-      "left": 202,
-      "top": 77,
-      "right": 703,
-      "bottom": 232
-    },
-    "path": ""
-  }
-]
-```
-
-### Поля объекта ответа
-
-| Поле | Тип | Описание |
-| --- | --- | --- |
-| `message` | `string` | Описание найденной проблемы. |
-| `rect` | `object` | Координаты элемента, в котором найдена проблема. |
-| `path` | `string` | Путь до элемента, если он был определен. Может быть пустой строкой. |
-
-## HTTP-ответ с ошибкой
-
-При ошибке сервер возвращает JSON-объект с полем `detail`.
+Body содержит сведения о завершённой задаче и массив `violations`. Если проблем нет, `violations` равен пустому массиву `[]`.
 
 ```json
 {
-  "detail": "Описание ошибки"
+  "taskId": "task-7dce4fb9-5464-4fa5-a78a-c98cd15cbf96",
+  "snapshotId": "snap-001",
+  "status": "completed",
+  "violations": [
+    {
+      "message": "property heading must be true",
+      "rect": {
+        "left": 202,
+        "top": 77,
+        "right": 703,
+        "bottom": 232
+      },
+      "path": ""
+    }
+  ]
+}
+```
+
+### Поля ответа
+
+| Поле | Тип | Описание |
+| --- | --- | --- |
+| `taskId` | `string` | Сформированный сервером идентификатор задачи. |
+| `snapshotId` | `string` | Идентификатор из запроса. |
+| `status` | `string` | Для успешного синхронного ответа имеет значение `completed`. |
+| `violations` | `array<object>` | Список найденных нарушений с полями `message`, `rect` и `path`. |
+
+## HTTP-ответ с ошибкой
+
+При ошибке сервер возвращает единый JSON-объект:
+
+```json
+{
+  "message": ["Описание ошибки"],
+  "error": "Unprocessable Entity",
+  "statusCode": 422
 }
 ```
 
@@ -152,17 +168,21 @@ Body содержит JSON-массив найденных проблем. Ес�
 
 | Status | Когда возникает |
 | --- | --- |
-| `422 Unprocessable Entity` | Неверный формат body: например, отсутствует `snapnodes`, отсутствует `image_base64` или `snapnodes` не является массивом. |
+| `422 Unprocessable Entity` | Неверный формат body, отсутствует обязательное поле или изображение не является поддерживаемым Base64. |
+| `502 Bad Gateway` | Ответ модели не соответствует ожидаемому JSON-контракту. |
 | `500 Internal Server Error` | Внутренняя ошибка сервера или ошибка при обращении к polza.ai. |
 | Другой HTTP-статус | Может быть возвращен, если polza.ai вернул ошибку и сервер пробросил ее клиенту. |
 
 ## Пример HTTP-запроса через curl
 
 ```bash
-curl -X POST "http://a11ylab.ru:8000##/checksnapshot" \
+curl -X POST "http://localhost:8000/checkSnapshot" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{
+    "snapshotId": "snap-001",
+    "platform": "android",
+    "capturedAt": "2026-06-10T17:09:39.968Z",
     "snapnodes": [
       {
         "text": "Вернуться назад",
@@ -198,12 +218,15 @@ import json
 
 import requests
 
-url = "http://a11ylab.ru:8000##/checksnapshot"
+url = "http://localhost:8000/checkSnapshot"
 
-with open("screenshot.jpg", "rb") as file:
+with open("tests/screenshot.jpg", "rb") as file:
     image_base64 = base64.b64encode(file.read()).decode("utf-8")
 
 payload = {
+    "snapshotId": "snap-001",
+    "platform": "android",
+    "capturedAt": "2026-06-10T17:09:39.968Z",
     "snapnodes": [
         {
             "text": "Вернуться назад",

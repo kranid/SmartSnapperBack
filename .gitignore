@@ -3,7 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.json
+!tests/testcases.example.json
+!tests/testcases.json
+!tests/runner_scenario.json
+!tests/original.json
 *.jpg
+!tests/screenshot.jpg
 *.kt
 # C extensions
 *.so

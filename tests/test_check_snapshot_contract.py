@@ -31,6 +31,7 @@ def image_base64() -> str:
 
 def payload(**overrides):
     data = {
+        "snapshotId": "snap-001",
         "snapnodes": [
             {
                 "text": "Back",
@@ -40,6 +41,8 @@ def payload(**overrides):
             }
         ],
         "image_base64": image_base64(),
+        "platform": "android",
+        "capturedAt": "2026-06-10T17:09:39.968Z",
     }
     data.update(overrides)
     return data
@@ -52,7 +55,7 @@ def patch_llm(monkeypatch, content):
         calls.append(messages)
         return SimpleNamespace(content=content)
 
-    monkeypatch.setattr(main, "llm", SimpleNamespace(invoke=invoke))
+    monkeypatch.setattr(main, "check_snapshot_llm", SimpleNamespace(invoke=invoke))
     return calls
 
 
@@ -71,14 +74,16 @@ def test_check_snapshot_accepts_both_routes_and_returns_issue(client, monkeypatc
 
     response = client.post(path, json=payload())
 
-    assert response.status_code == 200
-    assert response.json() == [
-        {
-            "message": "property role must be button",
-            "rect": {"left": 1, "top": 2, "right": 3, "bottom": 4},
-            "path": "root/button",
-        }
-    ]
+    assert response.status_code == 201
+    body = response.json()
+    assert body["taskId"].startswith("task-")
+    assert body["snapshotId"] == "snap-001"
+    assert body["status"] == "completed"
+    assert body["violations"] == [{
+        "message": "property role must be button",
+        "rect": {"left": 1, "top": 2, "right": 3, "bottom": 4},
+        "path": "root/button",
+    }]
     image_url = calls[0][0].content[1]["image_url"]["url"]
     assert image_url.startswith("data:image/png;base64,")
 
@@ -88,8 +93,8 @@ def test_check_snapshot_accepts_issues_object_response(client, monkeypatch):
 
     response = client.post("/checkSnapshot", json=payload())
 
-    assert response.status_code == 200
-    assert response.json() == []
+    assert response.status_code == 201
+    assert response.json()["violations"] == []
 
 
 def test_check_snapshot_rewrites_incorrect_data_url_mime(client, monkeypatch):
@@ -98,7 +103,7 @@ def test_check_snapshot_rewrites_incorrect_data_url_mime(client, monkeypatch):
 
     response = client.post("/checkSnapshot", json=payload(image_base64=wrong_data_url))
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     image_url = calls[0][0].content[1]["image_url"]["url"]
     assert image_url.startswith("data:image/png;base64,")
 
@@ -109,7 +114,8 @@ def test_check_snapshot_rejects_invalid_base64_before_llm_call(client, monkeypat
     response = client.post("/checkSnapshot", json=payload(image_base64="not base64"))
 
     assert response.status_code == 422
-    assert "valid base64" in response.json()["detail"]
+    assert "valid base64" in response.json()["message"][0]
+    assert response.json()["statusCode"] == 422
     assert calls == []
 
 
@@ -123,7 +129,7 @@ def test_check_snapshot_rejects_unsupported_image_before_llm_call(client, monkey
     response = client.post("/checkSnapshot", json=payload(image_base64=text_base64))
 
     assert response.status_code == 422
-    assert "Unsupported image format" in response.json()["detail"]
+    assert "Unsupported image format" in response.json()["message"][0]
     assert calls == []
 
 
@@ -133,7 +139,11 @@ def test_check_snapshot_returns_502_for_non_json_model_response(client, monkeypa
     response = client.post("/checkSnapshot", json=payload())
 
     assert response.status_code == 502
-    assert response.json()["detail"] == "Invalid JSON response from polza.ai."
+    assert response.json() == {
+        "message": ["Invalid JSON response from polza.ai."],
+        "error": "Bad Gateway",
+        "statusCode": 502,
+    }
 
 
 def test_check_snapshot_returns_502_for_missing_rect_coordinate(client, monkeypatch):
@@ -151,4 +161,19 @@ def test_check_snapshot_returns_502_for_missing_rect_coordinate(client, monkeypa
     response = client.post("/checkSnapshot", json=payload())
 
     assert response.status_code == 502
-    assert response.json()["detail"] == "Invalid JSON response from polza.ai."
+    assert response.json()["message"] == ["Invalid JSON response from polza.ai."]
+
+
+@pytest.mark.parametrize("missing", ["snapshotId", "platform", "capturedAt", "snapnodes", "image_base64"])
+def test_check_snapshot_requires_current_client_fields(client, monkeypatch, missing):
+    calls = patch_llm(monkeypatch, "[]")
+    request = payload()
+    request.pop(missing)
+
+    response = client.post("/checkSnapshot", json=request)
+
+    assert response.status_code == 422
+    assert response.json()["statusCode"] == 422
+    assert response.json()["error"] == "Unprocessable Entity"
+    assert any(missing in message for message in response.json()["message"])
+    assert calls == []

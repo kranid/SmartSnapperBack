@@ -1,0 +1,144 @@
+[
+  {
+    "id": 0,
+    "actionable": true,
+    "rect": {
+      "bottom": 222,
+      "left": 11,
+      "right": 146,
+      "top": 87
+    },
+    "role": "button"
+  },
+  {
+    "id": 1,
+    "heading": true,
+    "rect": {
+      "bottom": 232,
+      "left": 202,
+      "right": 703,
+      "top": 77
+    },
+    "text": "Настроить разделы"
+  },
+  {
+    "id": 2,
+    "rect": {
+      "bottom": 388,
+      "left": 45,
+      "right": 1035,
+      "top": 286
+    },
+    "text": "Выберите, что видеть на экране Платежи. Меняйте разделы местами, перетащив их за иконку справа"
+  },
+  {
+    "id": 3,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 580,
+      "left": 45,
+      "right": 1035,
+      "top": 422
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Недавно платили. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 4,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 761,
+      "left": 45,
+      "right": 1035,
+      "top": 603
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Перевести. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 5,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 942,
+      "left": 45,
+      "right": 1035,
+      "top": 784
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Каталог. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 6,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 1123,
+      "left": 45,
+      "right": 1035,
+      "top": 965
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Дома и авто. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 7,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 1304,
+      "left": 45,
+      "right": 1035,
+      "top": 1146
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "SberPay. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 8,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 1485,
+      "left": 45,
+      "right": 1035,
+      "top": 1327
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Собрать. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 9,
+    "actionable": true,
+    "checked": true,
+    "rect": {
+      "bottom": 1666,
+      "left": 45,
+      "right": 1035,
+      "top": 1508
+    },
+    "roleDescription": "Переключатель",
+    "stateDescription": "Включено",
+    "text": "Благотворительность. Коснитесь дважды и удерживайте, чтобы перенести раздел"
+  },
+  {
+    "id": 10,
+    "actionable": true,
+    "rect": {
+      "bottom": 2253,
+      "left": 45,
+      "right": 1035,
+      "top": 2107
+    },
+    "role": "button",
+    "text": "Вернуть по умолчанию"
+  }
+]
