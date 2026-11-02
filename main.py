@@ -113,7 +113,7 @@ RESPONSE_FORMAT_PROMPT = """
 
 # Initialize ChatOpenAI LLM for polza.ai
 check_snapshot_llm = ChatOpenAI(
-    model="anthropic/claude-opus-5.5",
+    model="openai/gpt-6.1-terra",
     api_key=POLZA_API_KEY,
     base_url="https://api.polza.ai/api/v1",
     timeout=MODEL_TIMEOUT_SECONDS,
